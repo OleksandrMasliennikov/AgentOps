@@ -1,0 +1,31 @@
+# Конфігурація Guardrails для retention-agent (Lab 2)
+
+output:                      # Guard на фінальну відповідь агента
+  pii:
+    on_fail: fix             # PII маскується, відповідь повертається
+    patterns:                # назва -> regex; збіг замінюється на <НАЗВА>
+      EMAIL: '[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}'
+      CREDIT_CARD: '\b(?:\d[ -]?){13,16}\b'
+      IBAN: '\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b'
+      PHONE: '(?<!\w)\+?\d{1,3}[ -]?\(?\d{2,3}\)?[ -]?\d{3}[ -]?\d{2}[ -]?\d{2}(?!\d)'
+      SSN: '\b\d{3}-\d{2}-\d{4}\b'
+
+tools:
+  allowed_domains:           # fetch_url дозволений лише для цих доменів (і піддоменів), тільки https
+    - example.com
+    - docs.python.org
+    - en.wikipedia.org
+  url_on_fail: block         # виклик не виконується, повертається ПОМИЛКА
+
+  scan_tool_output: true     # перевіряти вміст, який повертають tools (indirect prompt injection)
+  injection_on_fail: block
+  injection_patterns:        # case-insensitive
+    - 'ignore (all |any )?(the )?(previous|prior|above) (instructions|prompts?)'
+    - 'disregard (all |any )?(the )?(previous|prior|above|system)'
+    - 'you are now (in )?(a |an )?\w+'
+    - 'reveal (your |the )?(system )?prompt'
+    - 'do not (tell|inform|mention)( this)? (to )?the user'
+    - '(send|post|upload|exfiltrate|forward)\b.{0,80}https?://'
+    - 'new instructions?\s*:'
+
+log_file: logs/guardrails_blocked.jsonl

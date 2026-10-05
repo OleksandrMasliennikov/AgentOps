@@ -3,6 +3,7 @@ import os
 import sys
 
 import tracing
+from guardrails_setup import redact_pii
 from mcp import StdioServerParameters, stdio_client, ClientSession
 from langchain_mcp_adapters.tools import load_mcp_tools
 from langchain_openai import ChatOpenAI
@@ -25,10 +26,11 @@ TASK = os.getenv("TASK", "Find all .py files in the current directory, "
                  "read the first file found, and report how many lines it contains")
 SCRIPT_NAME = os.getenv("SCRIPT_NAME", "default")
 
-SYSTEM_PROMPT = ("You are a file assistant. Use the tools list_directory and read_file. "
-                 "Call each tool only when needed and never repeat an identical call. "
-                 "When you have read the file, finish with one sentence naming the file you read. "
-                 "Do not count lines and do not retell the file content.")
+SYSTEM_PROMPT = os.getenv("SYSTEM_PROMPT", (
+    "You are a file assistant. Use the tools list_directory, read_file and fetch_url. "
+    "Call each tool only when needed and never repeat an identical call. "
+    "When you have read the file, finish with one sentence naming the file you read. "
+    "Do not count lines and do not retell the file content."))
 
 server_params = StdioServerParameters(
     command=sys.executable,
@@ -71,6 +73,8 @@ def print_update(update: dict) -> None:
                     content = ", ".join(b.get("text", "") if isinstance(b, dict) else str(b) for b in content)
                 text = str(content)
                 print(f"[TOOL RESULT] {msg.name}: {text[:200]}{'...' if len(text) > 200 else ''}")
+            elif role == "AI":
+                print(f"[{role}] {redact_pii(str(msg.content))}")  # guardrail на фінальну відповідь
             else:
                 print(f"[{role}] {msg.content}")
 
@@ -107,7 +111,7 @@ async def main():
                     stream_input = None
                 elif state.values.get("messages"):
                     print(f"[SYSTEM] thread_id='{THREAD_ID}' уже завершено. Остання відповідь:")
-                    print(state.values["messages"][-1].content)
+                    print(redact_pii(str(state.values["messages"][-1].content)))
                     print_verified(state.values["messages"])
                     print("Щоб почати заново: THREAD_ID=<інший> python agent.py")
                     return

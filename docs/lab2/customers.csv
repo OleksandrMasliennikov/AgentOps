@@ -1,0 +1,3 @@
+id,name,email,phone,card,iban,plan,churn_risk
+1,Olena Kovalenko,olena.kovalenko@example.org,+380 67 123 45 67,4111 1111 1111 1111,UA213223130000026007233566001,Premium,high
+2,Ivan Petrenko,ivan.petrenko@example.org,+380 50 765 43 21,5500 0000 0000 0004,UA903052992990004149123456789,Basic,medium

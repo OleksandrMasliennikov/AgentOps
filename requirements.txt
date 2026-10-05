@@ -11,3 +11,5 @@ openinference-instrumentation-mcp
 opentelemetry-sdk
 pandas
 matplotlib
+guardrails-ai
+pyyaml

@@ -31,3 +31,16 @@ report:          ## cost dashboard (PNG + CSV у docs/lab1)
 
 clean-traces:    ## видалити том Phoenix (усі трейси!)
 	docker compose down -v
+
+.PHONY: guardrails-test injection-test injection-test-layer2 lab2-log
+guardrails-test: ## Lab2: детермінований тест guardrails (без LLM)
+	$(PY) scripts/guardrails_selftest.py 2>&1 | tee docs/lab2/selftest.log
+
+injection-test:  ## Lab2: e2e prompt injection, шар 1 (скан вмісту tools)
+	$(PY) scripts/injection_test.py 1 2>&1 | tee docs/lab2/injection_layer1.log
+
+injection-test-layer2: ## Lab2: e2e, скан вимкнено -> блокує allowlist доменів + PII
+	$(PY) scripts/injection_test.py 2 2>&1 | tee docs/lab2/injection_layer2.log
+
+lab2-log:        ## показати лог блокувань
+	cat logs/guardrails_blocked.jsonl
