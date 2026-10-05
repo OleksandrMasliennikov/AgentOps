@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 import sys
 
@@ -29,10 +30,9 @@ SCRIPT_NAME = os.getenv("SCRIPT_NAME", "default")
 MW = AgentOpsMiddleware(script=SCRIPT_NAME, thread_id=THREAD_ID)
 
 SYSTEM_PROMPT = os.getenv("SYSTEM_PROMPT", (
-    "You are a file assistant. Use the tools list_directory, read_file and fetch_url. "
-    "Call each tool only when needed and never repeat an identical call. "
-    "When you have read the file, finish with one sentence naming the file you read. "
-    "Do not count lines and do not retell the file content."))
+    "You are a file assistant. Use the tools list_directory, read_file and fetch_url when needed. "
+    "Never repeat an identical call. After using the tools, answer the user's question concisely "
+    "using only the tool results. If a tool returns an error, say so. Do not count lines yourself."))
 
 server_params = StdioServerParameters(
     command=sys.executable,
@@ -60,6 +60,18 @@ def print_verified(messages) -> None:
         print(f"[VERIFIED] read_file повернув помилку: {text}")
         return
     print(f"[VERIFIED] {paths.get(last.tool_call_id)} contains {len(text.splitlines())} lines (підраховано кодом)")
+
+
+def write_result(messages) -> None:
+    """Для eval-suite: зберігає виклики tools і фінальну відповідь у JSON (RESULT_JSON)."""
+    path = os.getenv("RESULT_JSON")
+    if not path:
+        return
+    calls = [{"name": tc["name"], "args": tc["args"]} for m in messages for tc in getattr(m, "tool_calls", None) or []]
+    answer = next((tool_text(m) for m in reversed(messages)
+                   if m.__class__.__name__ == "AIMessage" and not getattr(m, "tool_calls", None)), "")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump({"tool_calls": calls, "answer": answer}, f, ensure_ascii=False)
 
 
 def print_update(update: dict) -> None:
@@ -126,7 +138,9 @@ async def main():
                     print_update(update)
                     if STEP_DELAY:
                         await asyncio.sleep(STEP_DELAY)
-                print_verified((await agent.aget_state(config)).values["messages"])
+                final = (await agent.aget_state(config)).values["messages"]
+                print_verified(final)
+                write_result(final)
 
 
 async def traced_main():
@@ -142,7 +156,9 @@ async def traced_main():
             span.set_attribute("agentops.cost_usd", MW.cost)
             span.set_attribute("agentops.budget_usd", MW.budget)
             span.set_attribute("agentops.breaker_state", MW.breaker.state)
-    tracing.trace.get_tracer_provider().force_flush()
+    provider = tracing.trace.get_tracer_provider()
+    if hasattr(provider, "force_flush"):  # при TRACING=0 провайдер — no-op proxy
+        provider.force_flush()
 
 
 if __name__ == "__main__":

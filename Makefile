@@ -62,3 +62,7 @@ breaker-demo:    ## Lab3: e2e circuit breaker (поріг 2, читання не
 
 alerts:          ## Lab3: журнал алертів
 	cat logs/alerts.jsonl
+
+.PHONY: eval
+eval:            ## Lab4: eval regression suite локально (TRACING=0), exit 1 при регресії
+	TRACING=0 $(PY) evals/run_evals.py 2>&1 | tee docs/lab4_eval_local.log

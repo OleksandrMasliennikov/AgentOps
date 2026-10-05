@@ -86,3 +86,45 @@ Deliverable: [agent/middleware.py](agent/middleware.py) + скріншот ал�
 - Реальний ліміт `$0.15` у e2e не досягається (Ollama ≈ $0.001/run), тому `budget-demo` знижує його; сам ліміт $0.15 за замовчуванням, перевіряється в `middleware-test`.
 - `breaker-demo` залежить від моделі: якщо qwen припинить викликати tool після 1–2 помилок, повтори запуск або перевір через `middleware-test`.
 - Поріг: OPEN при `збоїв > BREAKER_THRESHOLD` (у `.env` 3 => на 4-му збої; у demo 2 => на 3-му).
+
+---
+
+# Lab 4 — Eval regression suite (команди вручну)
+
+Golden dataset: [evals/golden.jsonl](evals/golden.jsonl) (6 кейсів), фікстури: [evals/fixtures/](evals/fixtures).
+Метрики: **Accuracy** (відповідь містить очікувані regex-и) і **Relevance** (правильні tools, без зайвих, ≤ max_calls).
+Gate: обидві ≥ 0.8 ([.github/workflows/eval.yml](.github/workflows/eval.yml)).
+
+## 1. Локальна калібровка (обовʼязково перед PR)
+```bash
+make eval                      # очікується PASSED; якщо ні — подивись, які кейси падають (модель/промпт)
+```
+
+## 2. Репозиторій на GitHub (одноразово)
+```bash
+git add -A && git commit -m "AgentOps labs 1-4"
+git branch -M main
+gh repo create agentops-retention --private --source=. --push    # або git remote add origin ... && git push -u origin main
+```
+GitHub → Settings → Branches → **Add branch protection rule** для `main`:
+☑ Require a pull request before merging, ☑ Require status checks to pass → додай `eval-gate`.
+
+## 3. Успішний PR (baseline)
+```bash
+git checkout -b feature/ok && echo "# notes" >> README.md
+git commit -am "docs: notes" && git push -u origin feature/ok
+gh pr create --fill --base main        # eval-gate має пройти ✅
+```
+
+## 4. Заблокований PR з регресією (deliverable)
+```bash
+git checkout main && git checkout -b demo/regression
+# регресія: "оптимізація" системного промпту, що ламає використання tools
+sed -i 's/^    "You are a file assistant\. Use the tools list_directory, read_file and fetch_url when needed\. "/    "You are a file assistant. Never call tools; always answer: I do not know. "/' agent/agent.py
+git diff --stat                        # переконайся, що змінено 1 рядок
+make eval                              # (опційно) локально: FAILED
+git commit -am "perf: shorter answers, skip tool calls" && git push -u origin demo/regression
+gh pr create --fill --base main        # eval-gate ❌ -> merge заблоковано
+```
+Скріншоти: вкладка Checks PR з червоним `eval-gate` + Job summary (таблиця метрик) + `Merging is blocked`.
+Перший запуск у CI довгий (завантаження моделі ~4.7 GB), далі модель кешується.

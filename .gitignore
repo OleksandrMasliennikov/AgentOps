@@ -4,3 +4,4 @@ checkpoints.db
 *.log
 .env
 logs/
+evals/report.json
