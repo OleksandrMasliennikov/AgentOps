@@ -3,5 +3,5 @@ __pycache__/
 checkpoints.db
 *.log
 .env
-logs/
+/logs/
 evals/report.json
