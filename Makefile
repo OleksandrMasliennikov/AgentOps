@@ -44,3 +44,21 @@ injection-test-layer2: ## Lab2: e2e, скан вимкнено -> блокує a
 
 lab2-log:        ## показати лог блокувань
 	cat logs/guardrails_blocked.jsonl
+
+.PHONY: middleware-test budget-demo breaker-demo alerts
+middleware-test: ## Lab3: детермінований тест middleware + реальний Discord-алерт
+	$(PY) scripts/middleware_selftest.py 2>&1 | tee docs/lab3_selftest.log
+
+budget-demo:     ## Lab3: e2e hard-stop бюджету (ліміт знижено до $0.0005)
+	BUDGET_USD=0.0005 SCRIPT_NAME=budget_demo THREAD_ID=budget_$$(date +%s) \
+	TASK="Find all .py files in the current directory, read the first file found and name it" \
+	$(PY) -u agent/agent.py 2>&1 | tee docs/lab3_budget_demo.log
+
+breaker-demo:    ## Lab3: e2e circuit breaker (поріг 2, читання неіснуючих файлів)
+	BREAKER_THRESHOLD=2 SCRIPT_NAME=breaker_demo THREAD_ID=breaker_$$(date +%s) RECURSION_LIMIT=20 \
+	SYSTEM_PROMPT="You are a file assistant. Use read_file. Always call the tool for every file requested, one by one, even if previous calls failed." \
+	TASK="Read each of these files one by one: missing_a.txt, missing_b.txt, missing_c.txt, missing_d.txt, missing_e.txt" \
+	$(PY) -u agent/agent.py 2>&1 | tee docs/lab3_breaker_demo.log
+
+alerts:          ## Lab3: журнал алертів
+	cat logs/alerts.jsonl

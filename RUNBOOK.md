@@ -60,3 +60,29 @@ Deliverable: [agent/guardrails_config.yaml](agent/guardrails_config.yaml) + `log
 Примітка: якщо `pip install guardrails-ai` падає на Python 3.14, створи venv на 3.12/3.13:
 `rm -rf .venv && python3.12 -m venv .venv && make venv`.
 Шар 2 залежить від моделі: якщо qwen не спробувала `fetch_url` на evil-домен, тест покаже 0 спроб — повтори запуск.
+
+---
+
+# Lab 3 — Budget & circuit breaker (команди вручну)
+
+## 0. Discord Webhook (одноразово)
+1. У Discord створи сервер (або відкрий свій) і канал, наприклад `#agentops-alerts`.
+2. Канал → **Edit Channel** (⚙) → **Integrations** → **Webhooks** → **New Webhook** → **Copy Webhook URL**.
+3. Встав у `.env`: `DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...`
+Без URL алерти йдуть у dry-run (stderr) і в `logs/alerts.jsonl` — для скріншота потрібен реальний Discord.
+(Slack теж підтримується через `SLACK_WEBHOOK_URL`, необов'язково.)
+
+## 1. Команди
+```bash
+make venv                 # лише якщо змінювались залежності (нових немає)
+make middleware-test      # очікуються всі [PASS]; у Discord прийдуть 2 алерти (бюджет + OPEN)
+make budget-demo          # e2e: ліміт $0.0005 -> hard-stop, алерт у Discord, exit code 3
+make breaker-demo         # e2e: >2 збоїв поспіль -> OPEN, алерт у Discord, exit code 4
+make alerts               # logs/alerts.jsonl
+```
+Deliverable: [agent/middleware.py](agent/middleware.py) + скріншот алерта в Discord (OPEN і/або бюджет) + `docs/lab3_*.log`.
+
+Примітки:
+- Реальний ліміт `$0.15` у e2e не досягається (Ollama ≈ $0.001/run), тому `budget-demo` знижує його; сам ліміт $0.15 за замовчуванням, перевіряється в `middleware-test`.
+- `breaker-demo` залежить від моделі: якщо qwen припинить викликати tool після 1–2 помилок, повтори запуск або перевір через `middleware-test`.
+- Поріг: OPEN при `збоїв > BREAKER_THRESHOLD` (у `.env` 3 => на 4-му збої; у demo 2 => на 3-му).

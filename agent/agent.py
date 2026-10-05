@@ -4,6 +4,7 @@ import sys
 
 import tracing
 from guardrails_setup import redact_pii
+from middleware import AgentOpsMiddleware, BudgetExceeded, find_stop
 from mcp import StdioServerParameters, stdio_client, ClientSession
 from langchain_mcp_adapters.tools import load_mcp_tools
 from langchain_openai import ChatOpenAI
@@ -25,6 +26,7 @@ LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT", "120"))
 TASK = os.getenv("TASK", "Find all .py files in the current directory, "
                  "read the first file found, and report how many lines it contains")
 SCRIPT_NAME = os.getenv("SCRIPT_NAME", "default")
+MW = AgentOpsMiddleware(script=SCRIPT_NAME, thread_id=THREAD_ID)
 
 SYSTEM_PROMPT = os.getenv("SYSTEM_PROMPT", (
     "You are a file assistant. Use the tools list_directory, read_file and fetch_url. "
@@ -101,7 +103,8 @@ async def main():
             # SQLite-чекпоінтер зберігає стан на диску, тож він переживає перезапуск процесу
             async with AsyncSqliteSaver.from_conn_string(DB_PATH) as checkpointer:
                 agent = create_react_agent(model=llm, tools=tools, checkpointer=checkpointer, prompt=SYSTEM_PROMPT)
-                config = {"configurable": {"thread_id": THREAD_ID}, "recursion_limit": RECURSION_LIMIT}
+                config = {"configurable": {"thread_id": THREAD_ID}, "recursion_limit": RECURSION_LIMIT,
+                          "callbacks": [MW]}  # middleware: бюджет + circuit breaker
 
                 state = await agent.aget_state(config)
                 if state.next:
@@ -133,7 +136,12 @@ async def traced_main():
         span.set_attribute("script.name", SCRIPT_NAME)
         span.set_attribute("session.id", THREAD_ID)
         span.set_attribute("input.value", TASK)
-        await main()
+        try:
+            await main()
+        finally:
+            span.set_attribute("agentops.cost_usd", MW.cost)
+            span.set_attribute("agentops.budget_usd", MW.budget)
+            span.set_attribute("agentops.breaker_state", MW.breaker.state)
     tracing.trace.get_tracer_provider().force_flush()
 
 
@@ -147,3 +155,10 @@ if __name__ == "__main__":
         print(f"\n[SYSTEM] Перервано (Ctrl+C). Стан збережено в {DB_PATH}; "
               f"перезапустіть з тим самим THREAD_ID='{THREAD_ID}'.", file=sys.stderr)
         sys.exit(130)
+    except BaseException as e:
+        stop = find_stop(e)  # StopRun може бути загорнуто в ExceptionGroup
+        if stop is None:
+            raise
+        print(f"[SYSTEM] HARD-STOP ({type(stop).__name__}): {stop}. cost=${MW.cost:.6f} "
+              f"breaker={MW.breaker.state}", file=sys.stderr)
+        sys.exit(3 if isinstance(stop, BudgetExceeded) else 4)
