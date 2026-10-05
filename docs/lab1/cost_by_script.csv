@@ -1,0 +1,8 @@
+script,runs,cost_per_run,latency_s
+find_py,2,0.0031575,98.08348149999999
+list_docs,2,0.00168,25.558752
+list_root,2,0.0010445,16.298506
+missing_path,2,0.001056,16.5002275
+read_compose,2,0.001152,28.992776
+read_requirements,2,0.001137,24.647661499999998
+smoke,1,0.001134,72.374988

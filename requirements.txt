@@ -1,0 +1,13 @@
+mcp[cli]<2
+langchain-mcp-adapters
+langchain-openai
+langgraph
+langgraph-checkpoint-sqlite
+aiosqlite
+arize-phoenix-otel
+arize-phoenix-client
+openinference-instrumentation-langchain
+openinference-instrumentation-mcp
+opentelemetry-sdk
+pandas
+matplotlib
